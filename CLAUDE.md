@@ -137,6 +137,12 @@ théâtre de sécurité), plugins Hermes custom sans justification écrite, mono
   variables, classes) **sans accents**, et **pas de sur-francisation** — les termes
   techniques reconnus restent en anglais (thread, callback, gate, spike…). Docs
   techniques en anglais. Communication et journaux en français. (Aligné sur kaos.)
+- **Toute logique de factory naît en module Python testé ; le bash est du glue
+  uniquement** (`setup.sh`, invocations). Machine à états, gate engine, budget
+  guard, validateur de registre : Python + tests dès la première ligne. Leçon
+  d'omniscient/dark-factory#187 : leur logique piégée dans des orchestrateurs bash
+  (poll loop de 385 lignes testable seulement en sourçant le fichier) leur coûte
+  aujourd'hui un épic de refactoring entier.
 - Messages de commit = **journal de bord** (décision + pourquoi, "1 commit = 1 symptôme
   observé").
 - Quand un changement touche un comportement documenté (gates, budget, registre),

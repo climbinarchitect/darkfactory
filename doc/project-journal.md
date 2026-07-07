@@ -113,3 +113,37 @@
 1. Provisionner Hetzner CX32 + Tailscale + stack (`setup.sh`) — Opus/Claude Code.
 2. Scaffold du repo : `registry/` instancié + `validate_registry`.
 3. Spike #1 (prompt prêt), puis #2, puis #3.
+
+---
+
+## 2026-07-07 — Diff vs dark-factory (Alyan) : 4 leçons adoptées, 3 paris renforcés
+
+- **Contexte** : lecture du `omniscient/dark-factory` d'Alyan (code + issues des
+  10 derniers jours). Sa factory est ~6 mois devant en exécution (prod, self-repair,
+  ~60 fichiers de tests sur elle-même) — mais **sur Claude Max comme nous**, et son
+  historique récent documente des douleurs qui valident nos choix structurants.
+  Analyse complète : `doc/darkfactory-alyan-diff.md`.
+- **Leçons adoptées** (appliquées le jour même, un commit chacune) :
+  1. La fenêtre/cap épuisé est un échec d'*environnement*, pas de tâche — son
+     issue #35 (21 runs grillés en une nuit) est le mode d'échec exact que notre
+     budget-guard designait à froid. Signature à observer au spike #1.
+  2. Write bar + distinction invalidé/supersédé dans le jardinage du wiki (volés
+     à son contrat mémoire).
+  3. Logique de factory en Python testé dès le jour 1, bash = glue — son épic
+     #187 (refactoring de son scheduler bash de 50 Ko) est le contre-exemple payé.
+  4. Frontière contexte-vs-gouvernance nommée au registre : ce qui aide l'agent à
+     *lire* le repo peut vivre côté cible ; ce qui contraint ses *droits*, jamais.
+- **Paris renforcés, on ne change rien** : moteur emprunté (son issue #33 évalue…
+  les patterns Hermes — il converge vers notre point de départ) ; budget-guard qui
+  protège l'humain d'abord ; gouvernance hors du repo cible ; merge humain
+  (même lui livre en draft PR). Trade-off pause-forever vs fail-open désormais
+  documenté comme choix conscient (architecture §3).
+- **Fait clé** : il token-budgète *sur Max* — pas pour les dollars, pour étirer la
+  fenêtre 5h/hebdo. Trigger de réévaluation de notre unité coarse (sessions) :
+  saturation de fenêtre observée, pas un éventuel passage API.
+- **On ne suit pas** : epic-autopilot / self-improvement / ceiling automatique —
+  points d'arrivée d'une courbe de confiance (kill-switches + données d'éval
+  accumulées), pas features de départ. Cohérent avec notre anti-pattern « pas de
+  rôle sans mode d'échec documenté ».
+- **Collaboration** : accès write accordé à `omniscient` (Frank) sur le repo.
+  Note posée : le jour où le registre vit ici, branch protection sur `main`.

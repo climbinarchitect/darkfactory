@@ -194,6 +194,14 @@ Purpose: protect the **human's** weekly Claude sub caps from a looping factory
 - On trip: task → `BUDGET_BLOCKED`, notification with counts, nothing auto-resumes
   until the human raises the cap or the window rolls. The guard can only block,
   never spend.
+- **Window/cap exhaustion is an environment-level failure, never a task failure.**
+  Observed at scale by omniscient/dark-factory#35: an exhausted shared session
+  window makes *every* executor call fail instantly; treating those as per-task
+  failures burns the retry budget of the whole in-flight set on guaranteed losses.
+  Rule: on the exhaustion signature, pause **dispatch globally** + notify; do NOT
+  consume the task's retry; resume when the window rolls. Known signature to
+  detect: `result_is_error` + empty transcript + fast non-zero exit.
+  `[SPIKE #1: observe the exact signature of an exhausted-window claude -p call.]`
 - Orchestrator-side spend (Hermes loop) is governed separately: `[SPIKE #2 — if
   OpenAI sub validates, orchestration is flat-rate; if fallback to Claude API,
   add a hard dollar cap here.]`
@@ -252,6 +260,7 @@ Adding a line == adding a directory that passes the admissibility checklist
 | Failure | Behavior |
 |---|---|
 | Executor session crashes | retry once (fresh container, same spec), then `FAILED` + notify |
+| Claude session window/cap exhausted | environment-level: global dispatch pause + notify; task retries **not** consumed; auto-resume when the window rolls (§5) |
 | Claude auth expired | `FAILED` fast with explicit reason; notify — no blind retry loop |
 | Checks red on PR | stays `EXECUTING` (agent iterates) until session budget for the task is spent, then `FAILED` |
 | Gate never answered | paused forever, periodic re-ping; never auto-proceed |

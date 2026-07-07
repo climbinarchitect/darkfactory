@@ -74,6 +74,18 @@ are open. Therefore:
 - Distillation flow: Hermes `MEMORY.md` scratchpad accumulates; a periodic
   "wiki gardening" pass (human-triggered, later maybe scheduled) proposes
   promotions of durable facts scratchpad → wiki, as a PR.
+- **Write bar** (adopted from omniscient/dark-factory's memory contract): a fact
+  is promoted to the wiki only if *a future agent (or you) would make a materially
+  different decision because of it, compared to reading the project's CLAUDE.md
+  and repo docs alone*. If not → it stays in the scratchpad and dies there. This
+  is the gardening pass's acceptance criterion, applied at PR review.
+- **Removing a fact has two distinct forms — never conflate them:**
+  - **Invalidated**: the claim was never true. Don't delete silently — leave a
+    one-line tombstone with the reason (prevents re-adding the same wrong fact).
+  - **Superseded**: the claim was true, a newer entry covers it better. Replace,
+    and note what supersedes it in the commit message.
+  The distinction preserves the "was this ever right?" signal a reader needs when
+  weighing historical context.
 - No secrets, no tailnet hostnames, no tokens — symbolic names only, same rule as
   the registry.
 

@@ -1,0 +1,19 @@
+# Secrets — jamais dans le repo (cf. CLAUDE.md)
+.env
+.env.*
+*.key
+*.pem
+secrets*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editeurs
+.DS_Store
+Thumbs.db
+.obsidian/
+.vscode/
+.idea/

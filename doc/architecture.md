@@ -101,6 +101,14 @@ Rules:
 - Gate timeout behavior: **pause, never proceed.** A gate with no answer holds the
   task indefinitely and re-pings at a configurable interval. Default-open gates are
   how autonomous systems bite.
+- **Named trade-off — pause-forever vs fail-open.** Pause-forever buys safety at
+  the cost of liveness: flaky infra (a broken reviewer, a dead notifier) halts the
+  factory. The opposite choice exists and is legitimate at scale —
+  omniscient/dark-factory runs its code-review gate `fail_open` (reviewer error ⇒
+  advisory, never blocking) because at high throughput a stalled pipeline costs
+  more than a missed review. At our v1 posture (concurrency 1, human merge gate,
+  human in the loop) safety wins and pause-forever stands. Revisit **only** when
+  concurrency rises — and per gate, never globally.
 
 ### 3.1 Plan gate levels
 

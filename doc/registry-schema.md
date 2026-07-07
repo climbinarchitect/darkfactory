@@ -120,6 +120,17 @@ at orchestrator startup and on registry change: schema check + the field rules
 above + env var presence. **Fail-closed: an invalid line does not load**; the
 factory reports it on the intake channel rather than running ungoverned.
 
+## Admissible future extension (noted, not implemented)
+
+The registry boundary is **governance**, not all configuration. A target repo may
+someday carry a *context* file (e.g. component→doc mapping, memory routing — cf.
+omniscient/dark-factory's `.factory/adapter.yaml`, the legitimate part of it):
+the repo knows its own topology, and that knowledge helps the executor read it.
+The line is bright: **anything that helps the agent read the repo may live
+target-side; anything that constrains what the agent is allowed to do (gates,
+budgets, egress, tokens) lives in the registry, forever.** A target-side file
+that tries to declare governance keys is ignored and flagged, not merged.
+
 ## Non-goals
 
 Per-task YAML overrides files (per-task changes happen at intake, live in the task

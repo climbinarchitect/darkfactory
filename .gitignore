@@ -11,6 +11,10 @@ __pycache__/
 .venv/
 venv/
 
+# Claude Code — settings personnels (permissions approuvees localement);
+# .claude/settings.json (partage) resterait commitable si besoin un jour
+.claude/settings.local.json
+
 # OS / editeurs
 .DS_Store
 Thumbs.db

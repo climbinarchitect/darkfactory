@@ -145,5 +145,5 @@
   points d'arrivée d'une courbe de confiance (kill-switches + données d'éval
   accumulées), pas features de départ. Cohérent avec notre anti-pattern « pas de
   rôle sans mode d'échec documenté ».
-- **Collaboration** : accès write accordé à `omniscient` (Frank) sur le repo.
+- **Collaboration** : accès write accordé à `omniscient` (Alyan) sur le repo.
   Note posée : le jour où le registre vit ici, branch protection sur `main`.

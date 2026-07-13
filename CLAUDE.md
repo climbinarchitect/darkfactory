@@ -85,7 +85,7 @@ théâtre de sécurité), plugins Hermes custom sans justification écrite, mono
 
 ## Infrastructure (décisions prises, ne pas rouvrir sans nouveau fait)
 
-- **Séquencement** : spikes et build directement sur le **VPS Hetzner** (CX32, 4 vCPU /
+- **Séquencement** : spikes et build directement sur le **VPS Hetzner** (CX33, 4 vCPU /
   8 Go, facturation horaire). Le plan initial "spikes en local sur la VM Hyper-V" a été
   abandonné (fait nouveau, 2026-07-06) : l'host laptop n'a pas la marge RAM pour la VM à
   8 Go, et le temps de soirée vaut plus que ~8 $/mois. La portabilité vient de
@@ -165,3 +165,9 @@ théâtre de sécurité), plugins Hermes custom sans justification écrite, mono
 - Commencer la ligne #2 avant que la ligne Kaos ait livré le benchmark.
 - Écrire de la plomberie que Hermes, Claude Code ou GitHub fournit.
 - Rouvrir Pi-vs-VPS, Telegram-vs-UI, ou sub-vs-API sans fait nouveau.
+- **Servir la généralité future plutôt que la ligne kaos.** Alyan a fait grandir
+  sa factory *dans* un produit réel (markethawk) puis l'a extraite une fois prouvée ;
+  nous construisons en abstrait avant d'avoir rien livré. C'est notre exposition
+  maximale au sur-design. Test à appliquer à chaque choix v1 : **est-ce que ça sert
+  la livraison du benchmark kaos, ou une ligne #2 hypothétique ?** Si c'est la
+  deuxième réponse, c'est un smell — même si le design est élégant.

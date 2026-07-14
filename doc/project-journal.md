@@ -174,3 +174,25 @@
   headless résiste à la doc Hermes.
 - **Prochaine étape** : spike #1 pour de vrai (Hermes ↔ session `claude -p` de bout en
   bout), puis spike #3 (le benchmark golden tests kaos).
+
+---
+
+## 2026-07-14 (suite) — Spike #1 étape 1 = PASS
+
+- **Hermes pilote `claude -p` en subprocess** via un **skill natif `claude-code`**, et
+  rapporte le **JSON structuré intact sur Telegram**. La brique de base du design tient :
+  l'orchestrateur lance l'exécuteur headless et récupère sa sortie sans la corrompre.
+- **Non-problème confirmé : l'env du service systemd.** `HOME` correctement hérité —
+  aucun souci d'auth sur la session `claude -p` lancée depuis le daemon. Le risque
+  « auth headless sous systemd » qu'on surveillait au spike #1 ne s'est pas matérialisé
+  sur l'étape 1.
+- **Découverte à explorer** : le skill `claude-code` est peut-être *le* mécanisme
+  d'intégration qu'on cherchait, plutôt qu'un pilotage subprocess maison. Question
+  ouverte avant d'en dépendre : gère-t-il les **sessions longues**, le **resume**, la
+  **capture** ? Si oui, c'est de la plomberie qu'on n'écrit pas (cohérent avec le
+  garde-fou « ne pas réimplémenter ce que Hermes/Claude Code fournit »).
+- **Reste du spike #1** :
+  - **Étape 2** — tâche de ~5 min. **Risque anticipé** : bute probablement sur le
+    **timeout 180 s / lifetime 300 s** ; c'est exactement le mode d'échec « fenêtre
+    épuisée = échec d'environnement » qu'on veut voir en vrai.
+  - **Étape 3** — backend Docker (conteneur de tâche jetable), soit le **spike #1b**.

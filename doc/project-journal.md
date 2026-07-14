@@ -147,3 +147,30 @@
   rôle sans mode d'échec documenté ».
 - **Collaboration** : accès write accordé à `omniscient` (Alyan) sur le repo.
   Note posée : le jour où le registre vit ici, branch protection sur `main`.
+
+---
+
+## 2026-07-14 — Provisioning VPS + spike #2 = PASS
+
+- **VPS provisionné et stack validée** : Docker, Node, Claude Code installés ; compte
+  utilisateur non-root dedie (`inverted`). Chaque commande passe par `setup.sh` —
+  le serveur reste jetable et reconstructible (décision infra du 2026-07-06 tenue).
+- **Claude Code headless validé** : `claude -p` rend du JSON propre. C'est la
+  *précondition* du spike #1, pas le spike lui-même — reste à prouver que Hermes lance,
+  suit et récupère proprement la session en subprocess.
+- **Hermes installé, daemon systemd persistant** (linger activé) : survit à la
+  déconnexion, pas de session utilisateur requise pour tourner.
+- **Spike #2 = PASS.** Orchestration sur sub OpenAI via Codex (`gpt-5.6-terra`) :
+  l'hypothèse de l'auth par subscription (à la Codex CLI) tenait. Conséquence de
+  gouvernance : la sub OpenAI garde sa raison d'être — **le fallback Claude API plafonnée
+  n'est pas déclenché**, et la sub n'est pas à annuler.
+- **Intake Telegram fonctionnel**, langue réglée en français.
+- **Surface de tools réduite** (moindre privilège) : browser / web / computer-use
+  coupés. Cohérent avec « contexte d'un agent au strict nécessaire » — moins de surface
+  = moins d'exposition prompt-injection et d'egress non désiré.
+- **Verdict rd-journal** : toujours fermé. Spike #2 s'est résolu par application
+  compétente (auth Codex qui tient), pas par une incertitude technologique nécessitant
+  essais/mesures. Le candidat R&D reste le spike #1 *si* le subprocess long + récupération
+  headless résiste à la doc Hermes.
+- **Prochaine étape** : spike #1 pour de vrai (Hermes ↔ session `claude -p` de bout en
+  bout), puis spike #3 (le benchmark golden tests kaos).

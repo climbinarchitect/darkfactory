@@ -196,3 +196,71 @@
     **timeout 180 s / lifetime 300 s** ; c'est exactement le mode d'échec « fenêtre
     épuisée = échec d'environnement » qu'on veut voir en vrai.
   - **Étape 3** — backend Docker (conteneur de tâche jetable), soit le **spike #1b**.
+
+---
+
+## 2026-07-15 — Spike #1 : PASS de bout en bout (gateway) + découvertes d'architecture
+
+### Résultat
+- **Spike #1 = PASS.** Le pilotage de Claude Code par Hermes fonctionne des deux façons :
+  - **En direct** (`claude -p` lancé à la main sur le VPS) : tâche multi-étapes
+    (calc.py + test_calc.py + venv + pytest 5/5) en **26s**, `subtype: success`.
+  - **Via le gateway** (message Telegram → orchestrateur → skill claude-code →
+    subprocess) : même tâche livrée, résultat rapporté proprement sur Telegram.
+- Les trois piliers du design tiennent : intake asynchrone → orchestration →
+  délégation à Claude Code → résultat rapporté.
+
+### Le skill `claude-code` EST le mécanisme d'intégration (question ouverte tranchée)
+- Skill natif Hermes v2.2.0 (`skills/autonomous-ai-agents/claude-code/`), mûr.
+- Fournit nativement ce qu'on comptait gérer : `--output-format json`, reprise de
+  session (`--resume <session_id>`, `--session-id <uuid>` imposable, `--fork-session`),
+  détection d'erreur structurée (`subtype: success|error_max_turns|error_budget`),
+  budget par-tâche (`--max-budget-usd`), permissions exécutables (`--allowedTools`,
+  `--permission-mode plan`, `deny:["Read(.env)"]`).
+- **Conséquence** : on ne code pas de pilotage subprocess maison (garde-fou respecté).
+  Le mode print (`-p`) est préféré ; le mode tmux (multi-turn interactif) est de la
+  plomberie fragile à éviter en v1.
+- Interdits confirmés : `--dangerously-skip-permissions` (auto-approbation totale,
+  antithèse de la gouvernance) et `--bare` (force ANTHROPIC_API_KEY = facturation API,
+  or on est sur sub OAuth).
+
+### Découverte 1 — le backend `local` fait exécuter du code à l'orchestrateur SUR L'HÔTE
+- Preuve empirique (pas théorique) : via le gateway, l'orchestrateur a lui-même lancé
+  `pytest -q` puis `python3 -m venv .venv` **sur le VPS**, en plus du travail déjà fait
+  par Claude Code dans sa session. L'orchestrateur tourne sur l'hôte (backend `local`)
+  → il exécute du code hors de tout conteneur de tâche.
+- **Viole la trust boundary §7** (l'exécution de code doit vivre dans le conteneur de
+  tâche). Confirme que le **spike #1b (bascule backend Docker) n'est pas optionnel** —
+  démontré par observation, pas par principe.
+
+### Découverte 2 — dédoublement d'exécution orchestrateur/exécuteur
+- Claude Code fait déjà tourner les tests dans sa session (venv + pytest 5/5, visible
+  dans son JSON). L'orchestrateur les **re-exécute** de son côté.
+- Coûts : temps (le run via gateway a pris bien plus longtemps que les 26s directes,
+  en partie à cause de ce dédoublement), et exécution hors sandbox (cf. découverte 1).
+- **À raffiner (design)** : l'orchestrateur devrait *lire le verdict* de l'exécuteur
+  (le JSON contient déjà le résultat des tests), pas re-exécuter. Frontière de
+  responsabilité à préciser : l'exécuteur exécute et prouve ; l'orchestrateur lit,
+  juge, rapporte.
+
+### Découverte 3 — le modèle n'est pas homogène dans une session
+- `--model sonnet` demandé, mais `modelUsage` montre `claude-sonnet-5` ET
+  `claude-haiku-4-5` dans la même session (Claude Code route en interne).
+- **Conséquence budget-guard / traces** : "une session = un modèle" est faux. Le coût
+  agrégé (`total_cost_usd`) reste la bonne unité ; ne pas présumer l'homogénéité.
+- Coûts observés : "pong" 0,055 $ ; micro-tâche calc 0,126 $ (surtout du cache_read).
+  Extrapolation : une vraie tâche kaos = quelques dizaines de cents à ~1 $. Mesurer
+  sur une vraie tâche kaos avant de figer les caps par ligne.
+
+### Découverte 4 — timeouts à ajuster avant le spike #3
+- `terminal.timeout: 180` et `lifetime_seconds: 300` (config Hermes) non déclenchés sur
+  la micro-tâche (~26s), mais une tâche golden-tests kaos (lire le thermal controller,
+  ~30-40 turns à ~4s/turn) les dépassera. À monter avant le spike #3.
+
+### Reste à faire
+- Vérifier/garantir la persistance du gateway (linger) — le service s'est arrêté dans
+  la nuit (SIGTERM 2026-07-14 23:50), cause à confirmer.
+- Spike #1b : bascule backend `local` → `docker` (priorité rehaussée par découverte 1).
+- Mettre à jour architecture.md : §4 (resume via session_id natif), §5 (budget
+  par-tâche via --max-budget-usd), §7 (permissions exécutables), + la frontière de
+  responsabilité orchestrateur/exécuteur (découverte 2).

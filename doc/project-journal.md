@@ -258,8 +258,12 @@
   ~30-40 turns à ~4s/turn) les dépassera. À monter avant le spike #3.
 
 ### Reste à faire
-- Vérifier/garantir la persistance du gateway (linger) — le service s'est arrêté dans
-  la nuit (SIGTERM 2026-07-14 23:50), cause à confirmer.
+- **Persistance du gateway (linger) : non encore éprouvée, et volontairement.** Le
+  SIGTERM de 23:50 n'était pas une défaillance — arrêt délibéré parce que l'**allow-list
+  egress n'a pas encore été stress-testée**. Choix de gouvernance assumé : on ne laisse
+  pas tourner un agent autonome une nuit entière tant que le confinement réseau n'est pas
+  prouvé. Séquence à tenir : durcir + tester l'allow-list *avant* le premier run
+  overnight non surveillé (c'est ce run-là qui validera le linger).
 - Spike #1b : bascule backend `local` → `docker` (priorité rehaussée par découverte 1).
 - Mettre à jour architecture.md : §4 (resume via session_id natif), §5 (budget
   par-tâche via --max-budget-usd), §7 (permissions exécutables), + la frontière de

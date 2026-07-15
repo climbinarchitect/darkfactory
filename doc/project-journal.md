@@ -243,6 +243,17 @@
   responsabilité à préciser : l'exécuteur exécute et prouve ; l'orchestrateur lit,
   juge, rapporte.
 
+### Règle actée — l'orchestrateur n'exécute JAMAIS de code (exécution ni vérification)
+- Ferme proprement la découverte 1. La re-exécution de *vérification* garde une valeur
+  de gouvernance (second regard contre un exécuteur qui mentirait sur son JSON), mais
+  elle **doit vivre dans un conteneur, jamais sur l'orchestrateur**.
+- Formulation dure : **l'orchestrateur ne fait jamais tourner de code — ni pour
+  exécuter, ni pour vérifier.** Il lit des verdicts, juge, rapporte. Toute exécution de
+  code (travail *ou* re-vérification) est déléguée à un conteneur de tâche jetable.
+- Conséquence : la re-vérification au merge gate (piste retenue en découverte 2) n'est
+  pas une exception à la trust boundary — c'est une **tâche conteneurisée de plus**, pas
+  un `pytest` sur l'hôte. À câbler au moment du spike #1b, pas après.
+
 ### Découverte 3 — le modèle n'est pas homogène dans une session
 - `--model sonnet` demandé, mais `modelUsage` montre `claude-sonnet-5` ET
   `claude-haiku-4-5` dans la même session (Claude Code route en interne).

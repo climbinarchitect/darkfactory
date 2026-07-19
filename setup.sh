@@ -12,6 +12,7 @@
 set -euo pipefail
 
 NONROOT_USER="inverted"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { echo -e "\n\033[1;36m[setup]\033[0m $*"; }
 
@@ -79,6 +80,19 @@ else
   log "Installation de Claude Code CLI"
   npm install -g @anthropic-ai/claude-code
 fi
+
+# --- 5b. Image du conteneur de tache jetable (task-runner) -----------------
+# L'exécuteur (claude -p) tourne DANS ce conteneur, jamais sur l'hôte
+# (architecture.md §7, spike #1b). L'image est épinglée dur (base par digest +
+# claude-code par version exacte) dans docker/task-runner.Dockerfile — voir ce
+# fichier pour le pourquoi (leçon issue #300). Build ici pour que l'image ne vive
+# pas seulement en local : Dockerfile versionné + build scripté = reconstructible.
+# Idempotent : le cache de build rend un re-run quasi gratuit.
+log "Build de l'image task-runner (conteneur de tâche jetable)"
+docker build \
+  -f "$SCRIPT_DIR/docker/task-runner.Dockerfile" \
+  -t darkfactory-task-runner:claude-2.1.207 \
+  "$SCRIPT_DIR"
 
 # --- 6. Arbo de travail ----------------------------------------------------
 log "Création de l'arbo de travail sous /home/$NONROOT_USER"

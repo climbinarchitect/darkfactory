@@ -279,3 +279,83 @@
 - Mettre à jour architecture.md : §4 (resume via session_id natif), §5 (budget
   par-tâche via --max-budget-usd), §7 (permissions exécutables), + la frontière de
   responsabilité orchestrateur/exécuteur (découverte 2).
+
+---
+
+## 2026-07-19 — Spike #1b : PASS (core) — l'exécuteur tourne enfin en conteneur
+
+> Détail technique reproductible : `doc/spike-1b-findings.md`. Interview de cadrage
+> tenue avant le build (choix image + barre de PASS + gestion gateway).
+
+### Résultat
+- **PASS sur le cœur.** Hermes avec `terminal.backend: docker` lance un `claude -p`
+  complet **dans un conteneur jetable** : authentifié, travaillant sur le repo monté,
+  résultat JSON capturé fail-closed, **zéro code exécuté sur l'hôte**. La violation de
+  trust boundary du spike #1 (orchestrateur qui lançait pytest/venv sur le VPS) est
+  **fermée** — vérifiée par observation (hostname/cgroup conteneur, aucun venv/pycache
+  sur `~`), pas par principe. Ferme le marqueur §7 « l'exécuteur roule dans le conteneur,
+  jamais sur l'hôte ».
+- **2 items durcissement documentés, non stress-testés** : teardown par-tâche et egress.
+
+### Le point délicat (auth headless en conteneur) — résolu proprement
+- Toute l'auth tient dans **un fichier** : `~/.claude/.credentials.json` (OAuth sub).
+  Monté **read-only** via `docker_volumes` vers `/root/.claude/.credentials.json`. HOME
+  conteneur = `/root` en tmpfs (jetable) : claude y écrit cache/session/history, tout
+  disparaît à la destruction. **Read-only a suffi** (token frais, pas de refresh) —
+  valide la moitié « creds read-only » de la prémisse §7.
+- Le mécanisme natif de Hermes (`required_credential_files` / `terminal.credential_files`)
+  **ne pouvait pas** servir : il est confiné à `~/.hermes` (anti-traversal), or l'auth
+  vit dans `~/.claude`. `docker_volumes` (config opérateur trusted) est le bon chemin.
+
+### Image task-runner épinglée dur (leçon issue #300 appliquée)
+- `docker/task-runner.Dockerfile` versionné + build dans `setup.sh` (§5b) : image **pas
+  seulement locale**, serveur reconstructible. Base épinglée par **digest sha256** (pas
+  le tag flottant `python3.11-nodejs20`), `claude-code` épinglé sur **2.1.207** (version
+  known-good de l'hôte). Le build **échoue bruyamment** si la version glisse — l'inverse
+  du bug SHA silencieux d'Alyan.
+
+### Découvertes (design deltas — cf. findings pour le détail)
+1. **L'image par défaut n'a pas `claude`** → « flip le flag » était impossible tel quel ;
+   d'où l'image custom. La prémisse « bascule et valide » du prompt sous-estimait ça.
+2. **`backend` vs `env_type` : deux clés pour un réglage.** Le gateway lit `backend`,
+   le CLI/oneshot lit `env_type`. Config avec seulement `backend: docker` → gateway en
+   conteneur mais oneshot resté `local` (observé : premier test tourné sur l'hôte). Les
+   deux clés sont posées. **Footgun** : le harnais de test de darkfactory doit forcer les
+   `TERMINAL_*` explicitement, sinon il teste silencieusement le mauvais backend.
+3. **Hermes ne détruit PAS le conteneur par tâche.** Il tourne `sleep infinity` +
+   idle-reaper (~2×lifetime) + réutilisation par label (`docker_persist_across_processes`
+   défaut ON). « Jetable » chez Hermes = réutilisé entre turns, reapé à l'idle — **pas**
+   un conteneur par tâche tué en fin de tâche. **Contredit l'invariant §2.** Conséquence :
+   **le teardown est la responsabilité de darkfactory** — `docker rm -f` par label
+   `hermes-task-id` en quittant EXECUTING (teardown par label vérifié OK). Mettre aussi
+   `docker_persist_across_processes: false`.
+4. **Fichiers créés `root:root`** dans le repo monté (conteneur en root) → friction git/
+   ownership. Trancher `docker_run_as_host_user` vs chown-au-teardown **avant** de câbler
+   `git push`.
+5. **Egress grand ouvert par défaut** (conteneur atteint example.com et 1.1.1.1 — vérifié).
+   Firewall hôte = root-only (sudo à mot de passe, non dispo en session) + IP-allowlist
+   fragile (CDN). **Primitive durable sans root vérifiée** : réseau Docker `--internal`
+   bloque **tout** egress. Design retenu : `--internal` + **proxy domain-allowlist
+   dual-homed** comme seule sortie (le proxy CONNECT résout aussi le DNS). Stress-test =
+   item ouvert, qui **garde le gate « pas d'overnight avant allow-list testée »**.
+6. **Fail-closed confirmé** : un `claude` qui échoue rend `subtype: error_max_turns`,
+   `is_error: true`, `result: null`, **exit ≠ 0**. Capture qui vérifie exit + subtype
+   (jamais `|| true`) = fermée. Forme concrète demandée par §5.
+
+### État laissé
+- Config gateway **laissée en `backend: docker`** (état-cible : plus sûr que `local`,
+  qui était la violation même que le spike ferme). **Mais egress encore ouvert** → le
+  gate du journal tient : **durcir + tester l'allow-list avant tout run overnight non
+  surveillé.** Backup config : `~/.hermes/config.yaml.bak.spike1b.*`.
+- Dette architecture.md soldée en un passage (§4/§5/§6/§7, ci-dessous).
+
+### Verdict rd-journal
+- **Toujours fermé.** Le spike s'est résolu par application compétente (lecture du code
+  du backend docker, montage read-only, épinglage) — aucune incertitude technologique
+  irréductible. Le seul candidat R&D restant est le confinement egress d'un agent
+  autonome (proxy allowlist + churn CDN + compat proxy de Claude Code) *si* le stress-test
+  résiste à l'ingénierie courante. À rouvrir seulement à ce moment-là.
+
+### Prochaine étape
+- Stress-tester le proxy egress (gate overnight). Puis, egress prouvé : **spike #3**, le
+  benchmark golden tests kaos — la première vraie tâche de code en conteneur gouverné.

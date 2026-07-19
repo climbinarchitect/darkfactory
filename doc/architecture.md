@@ -1,8 +1,9 @@
 # darkfactory — Architecture (governance core)
 
-> Status: DESIGN — written before spikes #1/#2. Sections marked `[SPIKE]` depend on
-> spike outcomes and must be revisited. Everything else is engine-agnostic by design:
-> it survives a change of orchestrator (Hermes) or executor (Claude Code).
+> Status: DESIGN, updated after spikes #1/#1b/#2 (2026-07-19). The old `[SPIKE]`
+> markers are resolved inline (*italic notes*); what remains open is listed under
+> "Open questions". Everything else is engine-agnostic by design: it survives a change
+> of orchestrator (Hermes) or executor (Claude Code).
 
 ## 1. System overview
 
@@ -75,7 +76,12 @@ State invariants:
 - Every transition emits a trace event (see §6). No silent transitions.
 - `EXECUTING` is the only state where a container exists. Container lifetime ==
   time spent in `EXECUTING` (+ retries). Leaving the state for any reason kills
-  the container.
+  the container. **This kill is darkfactory's job, not Hermes'.** Spike #1b found
+  Hermes runs task containers as `sleep infinity` and only reaps them on an idle
+  timer (`~2 × lifetime_seconds`), reusing them across turns by label — so the
+  factory core must `docker rm -f` the `hermes-task-id=<task>` container on leaving
+  `EXECUTING`, and set `docker_persist_across_processes: false`, or the invariant is
+  fiction (see `doc/spike-1b-findings.md` Finding 4).
 - A task in `NEEDS_INPUT` or any `GATE_*` state consumes **zero** LLM budget.
 - Terminal states are terminal. A "retry" of a failed task is a **new task**
   referencing the old trace — history is append-only, like kaos heat history.
@@ -179,8 +185,10 @@ spec — if it invalidates the plan, the task transitions back to `SPECIFIED` an
 re-passes the plan gate rather than continuing on a stale plan; the executor never
 silently reconciles a contradiction between the spec and a human answer.
 The container is killed while waiting (state leaves `EXECUTING`) — resume spawns a
-fresh container from the saved task context. `[SPIKE #1: verify Claude Code headless
-can pause/resume or must restart with accumulated context — shapes resume cost.]`
+fresh container from the saved task context. *(Resolved, spike #1: the claude-code
+skill exposes native session resume — `--resume <session_id>`, imposable
+`--session-id`, `--fork-session` — so resume replays the session, not a full
+context rebuild; the fresh container re-mounts the same task repo.)*
 
 ## 4b. Long-horizon validation (OBSERVING)
 
@@ -223,10 +231,16 @@ Purpose: protect the **human's** weekly Claude sub caps from a looping factory
   Rule: on the exhaustion signature, pause **dispatch globally** + notify; do NOT
   consume the task's retry; resume when the window rolls. Known signature to
   detect: `result_is_error` + empty transcript + fast non-zero exit.
-  `[SPIKE #1: observe the exact signature of an exhausted-window claude -p call.]`
-- Orchestrator-side spend (Hermes loop) is governed separately: `[SPIKE #2 — if
-  OpenAI sub validates, orchestration is flat-rate; if fallback to Claude API,
-  add a hard dollar cap here.]`
+  *(Partially observed, spike #1b: a failed `claude -p` returns `is_error: true` +
+  `subtype: error_*` + `result: null` + non-zero exit — capture must check exit code
+  AND `subtype`, never `|| true`. The true window-exhaustion case still to be seen in
+  the wild; route it to the environment-level pause, not a per-task failure.)*
+- Per-task executor budget is enforceable natively: the claude-code skill exposes
+  `--max-budget-usd` (spike #1) — set it per task from the registry cap so a runaway
+  session self-terminates in-container rather than relying only on session counting.
+- Orchestrator-side spend (Hermes loop) is **flat-rate**: *(resolved, spike #2: the
+  OpenAI sub validated via Codex `gpt-5.6-terra`; the Claude-API-with-hard-cap
+  fallback is not triggered.)*
 
 ## 6. Traces (observability, demo material)
 
@@ -236,7 +250,10 @@ Per task, under `data/traces/<task-id>/`:
   `{ts, task, from, to, actor: human|factory|executor, reason, refs}`
 - `spec.md` — the approved task spec (what the plan gate approved).
 - `session/` — executor session artifacts (stdout JSON, result payload).
-  `[SPIKE #1: exact capture format from claude -p --output-format json.]`
+  *(Known, spike #1/#1b: the `--output-format json` result carries `subtype`,
+  `is_error`, `result`, `session_id`, `total_cost_usd`, and per-model `modelUsage` —
+  captured intact through Hermes. Note `modelUsage` shows multiple models per session
+  (sonnet + haiku): `total_cost_usd` is the unit, not "one session = one model".)*
 - PR body links the task id; the trace links the PR. Bidirectional, auditable.
 
 Traces are the raw material for the CV demo and the project journal. Format is
@@ -258,11 +275,25 @@ Secrets rules:
   the agent escapes the sandbox by construction. Hermes stays on the host: it
   orchestrates but never executes generated code. Consequence: the dev stack
   (claude, git, project deps) and the Claude auth live in the container.
+  *(Verified, spike #1b: with `terminal.backend: docker` + a pinned task-runner
+  image, `claude -p` runs in a container — no `venv`/pytest touches the host, unlike
+  the `local` backend of spike #1. This is the whole reason spike #1b existed.)*
 - Residual risk (accepted, mitigated): code the agent runs in-container can read
   the mounted OAuth credentials even read-only. Mitigations: short-lived
   containers + **egress restricted to an allowlist** (Anthropic, GitHub) so
-  exfiltration has nowhere to go. `[SPIKE #1: validate headless auth via
-  read-only mount + allowlist egress in practice.]`
+  exfiltration has nowhere to go.
+  - *Auth half — DONE (spike #1b):* the sub auth is a single file
+    (`~/.claude/.credentials.json`) mounted **read-only** via `docker_volumes` to
+    `/root/.claude/.credentials.json`; read-only was sufficient (see
+    `doc/spike-1b-findings.md`). HOME=`/root` is tmpfs in disposable mode, so
+    claude's cache/session/history die with the container.
+  - *Egress half — DESIGNED, NOT yet stress-tested (spike #1b):* default container
+    egress is **wide open** (verified — reaches arbitrary domains). Hermes has no
+    built-in domain allowlist (network is all-or-nothing). Retained design: a Docker
+    `--internal` network (verified to block *all* egress, no host root needed) + a
+    dual-homed **domain-allowlist proxy** as the single controlled egress. **This
+    gates the first unattended overnight run** — no autonomous run until the
+    allowlist is stood up and tested.
 - Task containers receive **only** the fine-grained GitHub token of their line's
   repo. Never the Telegram token, never other lines' tokens, never registry write
   access.
@@ -297,7 +328,20 @@ plugin-level Hermes extensions, journal line.
 
 ## Open questions (blocked on spikes)
 
-1. Hermes ⇄ factory core boundary: skill vs hook vs external process watching a
-   queue — decided by spike #1 findings, not by preference.
-2. Pause/resume cost of executor sessions (§4).
-3. Orchestration provider + its budget model (§5, spike #2).
+1. ~~Hermes ⇄ factory core boundary~~ **Resolved (spike #1):** the native
+   `claude-code` skill drives `claude -p` via Hermes' terminal tool — that is the
+   integration seam, no custom subprocess glue. The terminal backend (`docker`) is
+   what containerizes it (spike #1b).
+2. ~~Pause/resume cost of executor sessions~~ **Resolved (spike #1):** native session
+   resume (`--resume`/`--session-id`/`--fork-session`), §4.
+3. ~~Orchestration provider + its budget model~~ **Resolved (spike #2):** OpenAI sub
+   via Codex, flat-rate, §5.
+
+Still open after spikes #1/#1b/#2:
+
+4. **Egress allowlist** — designed (`--internal` + domain-allowlist proxy), not yet
+   stress-tested (§7). Gates the first unattended overnight run.
+5. **Per-task container teardown** — Hermes doesn't do it; darkfactory's state machine
+   must (§2, `doc/spike-1b-findings.md` Finding 4).
+6. **In-container file ownership** (`root:root`) vs `docker_run_as_host_user` — decide
+   before the task-runner does `git push` (spike #1b Finding 5).
